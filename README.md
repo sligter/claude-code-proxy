@@ -33,6 +33,10 @@ cp .env.example .env
 # Edit .env and add your API configuration
 ```
 
+### docker
+docker run --name cc-proxy -p 8082:8082 -v "${PWD}\.env:/app/.env" bradleylzh/cc-proxy:latest
+
+
 ### 3. Start Server
 
 ```bash
