@@ -1,12 +1,24 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from src.api.endpoints import router as api_router
+from src.web.routes import router as web_router
 import uvicorn
 import sys
 from src.core.config import config
+from pathlib import Path
 
 app = FastAPI(title="Claude-to-OpenAI API Proxy", version="1.0.0")
 
+# Include API router
 app.include_router(api_router)
+
+# Include Web UI router
+app.include_router(web_router)
+
+# Mount static files
+static_dir = Path(__file__).parent / "web" / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
@@ -37,6 +49,7 @@ def main():
     print(f"   Max Tokens Limit: {config.max_tokens_limit}")
     print(f"   Request Timeout: {config.request_timeout}s")
     print(f"   Server: {config.host}:{config.port}")
+    print(f"   Web UI: http://{config.host}:{config.port}/login")
     print("")
 
     # Parse log level - extract just the first word to handle comments

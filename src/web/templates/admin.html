@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Claude Code Proxy - Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            margin: 0;
+        }
+        .logout-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .save-btn:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .hidden {
+            display: none;
+        }
+
+        /* Simple tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            margin-left: 5px;
+            color: #007bff;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 250px;
+            background-color: #333;
+            color: white;
+            text-align: left;
+            border-radius: 4px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Model selection styles */
+        .model-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .refresh-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .refresh-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .refresh-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .custom-toggle {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .custom-input {
+            margin-top: 5px;
+            display: none;
+        }
+
+        /* Password toggle styles */
+        .password-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle:hover {
+            color: #007bff;
+        }
+
+        .password-field {
+            padding-right: 35px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Claude Code Proxy Admin</h1>
+        <button id="logout-btn" class="logout-btn">Logout</button>
+    </header>
+    
+    <div class="container">
+        <div id="status" class="status hidden"></div>
+        
+        <form id="config-form">
+            <div class="card">
+                <h2>Big Model Configuration</h2>
+                <div class="form-group">
+                    <label for="big_model_provider">Provider</label>
+                    <select id="big_model_provider" name="big_model_provider">
+                        <option value="openai">OpenAI</option>
+                        <option value="azure">Azure OpenAI</option>
+                        <option value="ollama">Ollama</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="big_model_api_key">API Key
+                        <span class="tooltip">?
+                            <span class="tooltiptext">大模型的 API 密钥</span>
+                        </span>
+                    </label>
+                    <div class="password-container">
+                        <input type="password" id="big_model_api_key" name="big_model_api_key" class="password-field">
+                        <button type="button" class="password-toggle" onclick="togglePassword('big_model_api_key')" title="显示/隐藏密码">
+                            👁️
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="big_model_base_url">Base URL
+                        <span class="tooltip">?
+                            <span class="tooltiptext">API 服务的基础 URL</span>
+                        </span>
+                    </label>
+                    <input type="text" id="big_model_base_url" name="big_model_base_url">
+                </div>
+                <div class="form-group">
+                    <div class="model-controls">
+                        <label for="big_model_name">Model Name
+                            <span class="tooltip">?
+                                <span class="tooltiptext">要使用的模型名称</span>
+                            </span>
+                        </label>
+                        <button type="button" class="refresh-btn" onclick="loadModels('big')">刷新模型列表</button>
+                    </div>
+                    <select id="big_model_name" name="big_model_name">
+                        <option value="">正在加载模型列表...</option>
+                    </select>
+                    <input type="text" id="big_model_name_custom" placeholder="或手动输入模型名称" class="custom-input">
+                    <div class="custom-toggle">
+                        <label>
+                            <input type="checkbox" id="big_model_custom_toggle" onchange="toggleCustomInput('big')"> 手动输入
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="big_model_azure_api_version">Azure API Version (if applicable)
+                        <span class="tooltip">?
+                            <span class="tooltiptext">Azure OpenAI 的 API 版本</span>
+                        </span>
+                    </label>
+                    <input type="text" id="big_model_azure_api_version" name="big_model_azure_api_version">
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Small Model Configuration</h2>
+                <div class="form-group">
+                    <label for="small_model_provider">Provider</label>
+                    <select id="small_model_provider" name="small_model_provider">
+                        <option value="openai">OpenAI</option>
+                        <option value="azure">Azure OpenAI</option>
+                        <option value="ollama">Ollama</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="small_model_api_key">API Key
+                        <span class="tooltip">?
+                            <span class="tooltiptext">小模型的 API 密钥</span>
+                        </span>
+                    </label>
+                    <div class="password-container">
+                        <input type="password" id="small_model_api_key" name="small_model_api_key" class="password-field">
+                        <button type="button" class="password-toggle" onclick="togglePassword('small_model_api_key')" title="显示/隐藏密码">
+                            👁️
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="small_model_base_url">Base URL
+                        <span class="tooltip">?
+                            <span class="tooltiptext">小模型 API 服务的基础 URL</span>
+                        </span>
+                    </label>
+                    <input type="text" id="small_model_base_url" name="small_model_base_url">
+                </div>
+                <div class="form-group">
+                    <div class="model-controls">
+                        <label for="small_model_name">Model Name
+                            <span class="tooltip">?
+                                <span class="tooltiptext">小模型的名称</span>
+                            </span>
+                        </label>
+                        <button type="button" class="refresh-btn" onclick="loadModels('small')">刷新模型列表</button>
+                    </div>
+                    <select id="small_model_name" name="small_model_name">
+                        <option value="">正在加载模型列表...</option>
+                    </select>
+                    <input type="text" id="small_model_name_custom" placeholder="或手动输入模型名称" class="custom-input">
+                    <div class="custom-toggle">
+                        <label>
+                            <input type="checkbox" id="small_model_custom_toggle" onchange="toggleCustomInput('small')"> 手动输入
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="small_model_azure_api_version">Azure API Version (if applicable)
+                        <span class="tooltip">?
+                            <span class="tooltiptext">Azure OpenAI 的 API 版本</span>
+                        </span>
+                    </label>
+                    <input type="text" id="small_model_azure_api_version" name="small_model_azure_api_version">
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Server Settings</h2>
+                <div class="form-group">
+                    <label for="host">Host
+                        <span class="tooltip">?
+                            <span class="tooltiptext">服务器监听地址</span>
+                        </span>
+                    </label>
+                    <input type="text" id="host" name="host">
+                </div>
+                <div class="form-group">
+                    <label for="port">Port
+                        <span class="tooltip">?
+                            <span class="tooltiptext">服务器端口号</span>
+                        </span>
+                    </label>
+                    <input type="number" id="port" name="port">
+                </div>
+                <div class="form-group">
+                    <label for="log_level">Log Level
+                        <span class="tooltip">?
+                            <span class="tooltiptext">日志记录级别</span>
+                        </span>
+                    </label>
+                    <select id="log_level" name="log_level">
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="max_tokens_limit">Max Tokens Limit
+                        <span class="tooltip">?
+                            <span class="tooltiptext">最大 token 数量限制</span>
+                        </span>
+                    </label>
+                    <input type="number" id="max_tokens_limit" name="max_tokens_limit">
+                </div>
+                <div class="form-group">
+                    <label for="min_tokens_limit">Min Tokens Limit</label>
+                    <input type="number" id="min_tokens_limit" name="min_tokens_limit">
+                </div>
+                <div class="form-group">
+                    <label for="request_timeout">Request Timeout (seconds)</label>
+                    <input type="number" id="request_timeout" name="request_timeout">
+                </div>
+                <div class="form-group">
+                    <label for="max_retries">Max Retries</label>
+                    <input type="number" id="max_retries" name="max_retries">
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Admin Settings</h2>
+                <div class="form-group">
+                    <label for="admin_username">Admin Username</label>
+                    <input type="text" id="admin_username" name="admin_username">
+                </div>
+                <div class="form-group">
+                    <label for="admin_password">Admin Password</label>
+                    <input type="password" id="admin_password" name="admin_password">
+                </div>
+            </div>
+            
+            <button type="submit" class="save-btn">Save Configuration</button>
+        </form>
+    </div>
+
+    <script>
+        // Check authentication
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Logout function
+        document.getElementById('logout-btn').addEventListener('click', function() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+
+        // Toggle password visibility
+        function togglePassword(fieldId) {
+            const field = document.getElementById(fieldId);
+            const button = field.nextElementSibling;
+
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.textContent = '🙈';
+                button.title = '隐藏密码';
+            } else {
+                field.type = 'password';
+                button.textContent = '👁️';
+                button.title = '显示密码';
+            }
+        }
+
+        // Toggle between dropdown and custom input for model name
+        function toggleCustomInput(modelType) {
+            const checkbox = document.getElementById(`${modelType}_model_custom_toggle`);
+            const select = document.getElementById(`${modelType}_model_name`);
+            const customInput = document.getElementById(`${modelType}_model_name_custom`);
+
+            if (checkbox.checked) {
+                select.style.display = 'none';
+                customInput.style.display = 'block';
+                customInput.name = `${modelType}_model_name`;
+                select.name = '';
+            } else {
+                select.style.display = 'block';
+                customInput.style.display = 'none';
+                select.name = `${modelType}_model_name`;
+                customInput.name = '';
+            }
+        }
+
+        // Load models from API
+        async function loadModels(modelType, isAutoLoad = false) {
+            const baseUrlField = document.getElementById(`${modelType}_model_base_url`);
+            const apiKeyField = document.getElementById(`${modelType}_model_api_key`);
+            const modelSelect = document.getElementById(`${modelType}_model_name`);
+
+            const baseUrl = baseUrlField.value.trim();
+            const apiKey = apiKeyField.value.trim();
+
+            if (!baseUrl || !apiKey) {
+                if (!isAutoLoad) {
+                    showStatus('请先填写 Base URL 和 API Key', false);
+                }
+                return;
+            }
+
+            // Show loading state
+            let button = null;
+            let originalText = '';
+
+            if (!isAutoLoad && event && event.target) {
+                button = event.target;
+                originalText = button.textContent;
+                button.textContent = '加载中...';
+                button.disabled = true;
+            }
+
+            try {
+                const response = await fetch(`/api/models?base_url=${encodeURIComponent(baseUrl)}&api_key=${encodeURIComponent(apiKey)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    if (data.success && data.models && data.models.length > 0) {
+                        // Store current selected value
+                        const currentValue = modelSelect.value;
+
+                        // Clear existing options except the first one
+                        modelSelect.innerHTML = '<option value="">请选择模型...</option>';
+
+                        // Add models to dropdown
+                        data.models.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            modelSelect.appendChild(option);
+                        });
+
+                        // Restore selected value if it exists in the new list
+                        if (currentValue && data.models.includes(currentValue)) {
+                            modelSelect.value = currentValue;
+                        }
+
+                        if (!isAutoLoad) {
+                            showStatus(`成功加载 ${data.models.length} 个模型`, true);
+                        }
+                    } else {
+                        if (!isAutoLoad) {
+                            showStatus(data.error || '未找到可用模型', false);
+                        }
+                    }
+                } else {
+                    if (!isAutoLoad) {
+                        showStatus('获取模型列表失败', false);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+                if (!isAutoLoad) {
+                    showStatus('获取模型列表时发生错误', false);
+                }
+            } finally {
+                if (button) {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+            }
+        }
+
+        // Auto-load models for a specific model type
+        async function autoLoadModels(modelType) {
+            const modelSelect = document.getElementById(`${modelType}_model_name`);
+
+            // Update loading text
+            modelSelect.innerHTML = '<option value="">正在加载模型列表...</option>';
+
+            // Small delay to ensure form fields are populated
+            setTimeout(async () => {
+                const result = await loadModels(modelType, true);
+
+                // If auto-load failed, show default option
+                if (modelSelect.children.length <= 1) {
+                    modelSelect.innerHTML = '<option value="">请选择模型...</option>';
+                }
+            }, 500);
+        }
+
+        // Load current configuration
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const config = await response.json();
+
+                    // Populate form fields
+                    Object.keys(config).forEach(key => {
+                        const element = document.getElementById(key);
+                        if (element) {
+                            element.value = config[key];
+                        }
+                    });
+
+                    // Auto-load model lists after configuration is loaded
+                    autoLoadModels('big');
+                    autoLoadModels('small');
+
+                } else {
+                    showStatus('Failed to load configuration', false);
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+                showStatus('Error loading configuration', false);
+            }
+        }
+
+        // Save configuration
+        document.getElementById('config-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const config = {};
+
+            for (const [key, value] of formData.entries()) {
+                config[key] = value;
+            }
+
+            // Handle custom model name inputs
+            ['big', 'small'].forEach(modelType => {
+                const customToggle = document.getElementById(`${modelType}_model_custom_toggle`);
+                const customInput = document.getElementById(`${modelType}_model_name_custom`);
+
+                if (customToggle.checked && customInput.value.trim()) {
+                    config[`${modelType}_model_name`] = customInput.value.trim();
+                }
+            });
+
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(data.message || 'Configuration saved and reloaded successfully!', true);
+
+                    // Reload config to show updated values
+                    setTimeout(() => {
+                        loadConfig();
+                    }, 1000);
+                } else {
+                    const data = await response.json();
+                    showStatus(data.detail || 'Failed to save configuration', false);
+                }
+            } catch (error) {
+                console.error('Error saving config:', error);
+                showStatus('Error saving configuration', false);
+            }
+        });
+
+        // Show status message
+        function showStatus(message, isSuccess) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = isSuccess ? 'status success' : 'status error';
+            statusElement.classList.remove('hidden');
+
+            // Hide after 5 seconds
+            setTimeout(() => {
+                statusElement.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Load configuration on page load
+        loadConfig();
+    </script>
+</body>
+</html>
