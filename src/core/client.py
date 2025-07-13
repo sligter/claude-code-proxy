@@ -72,14 +72,14 @@ class OpenAIClient:
             return completion.model_dump()
         
         except AuthenticationError as e:
-            raise HTTPException(status_code=401, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=401, detail=OpenAIClient.classify_openai_error(str(e)))
         except RateLimitError as e:
-            raise HTTPException(status_code=429, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=429, detail=OpenAIClient.classify_openai_error(str(e)))
         except BadRequestError as e:
-            raise HTTPException(status_code=400, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=400, detail=OpenAIClient.classify_openai_error(str(e)))
         except APIError as e:
             status_code = getattr(e, 'status_code', 500)
-            raise HTTPException(status_code=status_code, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=status_code, detail=OpenAIClient.classify_openai_error(str(e)))
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
         
@@ -121,14 +121,14 @@ class OpenAIClient:
             yield "data: [DONE]"
                 
         except AuthenticationError as e:
-            raise HTTPException(status_code=401, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=401, detail=OpenAIClient.classify_openai_error(str(e)))
         except RateLimitError as e:
-            raise HTTPException(status_code=429, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=429, detail=OpenAIClient.classify_openai_error(str(e)))
         except BadRequestError as e:
-            raise HTTPException(status_code=400, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=400, detail=OpenAIClient.classify_openai_error(str(e)))
         except APIError as e:
             status_code = getattr(e, 'status_code', 500)
-            raise HTTPException(status_code=status_code, detail=self.classify_openai_error(str(e)))
+            raise HTTPException(status_code=status_code, detail=OpenAIClient.classify_openai_error(str(e)))
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
         
@@ -137,7 +137,8 @@ class OpenAIClient:
             if request_id and request_id in self.active_requests:
                 del self.active_requests[request_id]
 
-    def classify_openai_error(self, error_detail: Any) -> str:
+    @staticmethod
+    def classify_openai_error(error_detail: Any) -> str:
         """Provide specific error guidance for common OpenAI API issues."""
         error_str = str(error_detail).lower()
         

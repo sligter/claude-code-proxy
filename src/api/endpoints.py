@@ -16,13 +16,6 @@ from src.core.model_manager import model_manager
 
 router = APIRouter()
 
-openai_client = OpenAIClient(
-    config.openai_api_key,
-    config.openai_base_url,
-    config.request_timeout,
-    api_version=config.azure_api_version,
-)
-
 @router.post("/v1/messages")
 async def create_message(request: ClaudeMessagesRequest, http_request: Request):
     try:
@@ -30,22 +23,38 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request):
             f"Processing Claude request: model={request.model}, stream={request.stream}"
         )
 
-        # Generate unique request ID for cancellation tracking
+        # Get model-specific configuration from the manager
+        model_config = model_manager.get_model_config(request.model)
+        
+        # This is the actual model name to be passed to the provider
+        openai_model_name = model_config["model_name"]
+
+        # Dynamically create an OpenAI client for this specific request
+        openai_client = OpenAIClient(
+            api_key=model_config["api_key"],
+            base_url=model_config["base_url"],
+            timeout=config.request_timeout,
+            api_version=model_config["api_version"],
+        )
+
+        # Generate a unique ID for this request for cancellation tracking
         request_id = str(uuid.uuid4())
 
-        # Convert Claude request to OpenAI format
-        openai_request = convert_claude_to_openai(request, model_manager)
+        # Convert the incoming Claude-formatted request to the OpenAI format
+        openai_request = convert_claude_to_openai(request, openai_model_name)
 
-        # Check if client disconnected before processing
+        # Before making the API call, check if the client has already disconnected
         if await http_request.is_disconnected():
+            logger.warning(f"Client disconnected before processing request {request_id}")
             raise HTTPException(status_code=499, detail="Client disconnected")
 
         if request.stream:
-            # Streaming response - wrap in error handling
             try:
+                # For streaming responses, create an async generator
                 openai_stream = openai_client.create_chat_completion_stream(
                     openai_request, request_id
                 )
+                # Stream the converted response back to the client
                 return StreamingResponse(
                     convert_openai_streaming_to_claude_with_cancellation(
                         openai_stream,
@@ -64,46 +73,43 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request):
                     },
                 )
             except HTTPException as e:
-                # Convert to proper error response for streaming
-                logger.error(f"Streaming error: {e.detail}")
-                import traceback
-
-                logger.error(traceback.format_exc())
-                error_message = openai_client.classify_openai_error(e.detail)
+                # Handle potential HTTP exceptions during streaming setup
+                logger.error(f"Streaming error for request {request_id}: {e.detail}")
+                error_message = OpenAIClient.classify_openai_error(e.detail)
                 error_response = {
                     "type": "error",
                     "error": {"type": "api_error", "message": error_message},
                 }
+                # Return a JSON error response even for a streaming request
                 return JSONResponse(status_code=e.status_code, content=error_response)
         else:
-            # Non-streaming response
+            # For non-streaming responses, make a single API call
             openai_response = await openai_client.create_chat_completion(
                 openai_request, request_id
             )
+            # Convert the OpenAI response back to the Claude format
             claude_response = convert_openai_to_claude_response(
                 openai_response, request
             )
             return claude_response
+            
     except HTTPException:
+        # Re-raise known HTTP exceptions
         raise
     except Exception as e:
+        # Handle unexpected errors
         import traceback
-
-        logger.error(f"Unexpected error processing request: {e}")
-        logger.error(traceback.format_exc())
-        error_message = openai_client.classify_openai_error(str(e))
+        logger.error(f"""Unexpected error processing request: {e}
+{traceback.format_exc()}""")
+        # Classify the error to provide a more helpful message to the client
+        error_message = OpenAIClient.classify_openai_error(str(e))
         raise HTTPException(status_code=500, detail=error_message)
 
 
 @router.post("/v1/messages/count_tokens")
 async def count_tokens(request: ClaudeTokenCountRequest):
     try:
-        # For token counting, we'll use a simple estimation
-        # In a real implementation, you might want to use tiktoken or similar
-
         total_chars = 0
-
-        # Count system message characters
         if request.system:
             if isinstance(request.system, str):
                 total_chars += len(request.system)
@@ -111,8 +117,6 @@ async def count_tokens(request: ClaudeTokenCountRequest):
                 for block in request.system:
                     if hasattr(block, "text"):
                         total_chars += len(block.text)
-
-        # Count message characters
         for msg in request.messages:
             if msg.content is None:
                 continue
@@ -122,16 +126,11 @@ async def count_tokens(request: ClaudeTokenCountRequest):
                 for block in msg.content:
                     if hasattr(block, "text") and block.text is not None:
                         total_chars += len(block.text)
-
-        # Rough estimation: 4 characters per token
         estimated_tokens = max(1, total_chars // 4)
-
         return {"input_tokens": estimated_tokens}
-
     except Exception as e:
         logger.error(f"Error counting tokens: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/health")
 async def health_check():
@@ -139,48 +138,77 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "openai_api_configured": bool(config.openai_api_key),
-        "api_key_valid": config.validate_api_key(),
+        "big_model_api_configured": bool(config.big_model_api_key),
+        "small_model_api_configured": bool(config.small_model_api_key),
+        "big_model_api_key_valid": config.validate_api_key(config.big_model_api_key),
+        "small_model_api_key_valid": config.validate_api_key(config.small_model_api_key),
     }
 
 
 @router.get("/test-connection")
 async def test_connection():
-    """Test API connectivity to OpenAI"""
+    """Test API connectivity to configured providers."""
+    results = {}
+    
+    # Test Big Model Connection
     try:
-        # Simple test request to verify API connectivity
-        test_response = await openai_client.create_chat_completion(
+        big_model_client = OpenAIClient(
+            api_key=config.big_model_api_key,
+            base_url=config.big_model_base_url,
+            timeout=10, # Shorter timeout for tests
+            api_version=config.big_model_azure_api_version,
+        )
+        test_response = await big_model_client.create_chat_completion(
             {
-                "model": config.small_model,
+                "model": config.big_model_name,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 5,
             }
         )
-
-        return {
+        results["big_model_connection"] = {
             "status": "success",
-            "message": "Successfully connected to OpenAI API",
-            "model_used": config.small_model,
-            "timestamp": datetime.now().isoformat(),
+            "provider": config.big_model_provider,
+            "model_used": config.big_model_name,
             "response_id": test_response.get("id", "unknown"),
         }
-
     except Exception as e:
-        logger.error(f"API connectivity test failed: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "failed",
-                "error_type": "API Error",
-                "message": str(e),
-                "timestamp": datetime.now().isoformat(),
-                "suggestions": [
-                    "Check your OPENAI_API_KEY is valid",
-                    "Verify your API key has the necessary permissions",
-                    "Check if you have reached rate limits",
-                ],
-            },
+        results["big_model_connection"] = {
+            "status": "failed",
+            "provider": config.big_model_provider,
+            "model_used": config.big_model_name,
+            "error": OpenAIClient.classify_openai_error(str(e)),
+        }
+
+    # Test Small Model Connection
+    try:
+        small_model_client = OpenAIClient(
+            api_key=config.small_model_api_key,
+            base_url=config.small_model_base_url,
+            timeout=10, # Shorter timeout for tests
+            api_version=config.small_model_azure_api_version,
         )
+        test_response = await small_model_client.create_chat_completion(
+            {
+                "model": config.small_model_name,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 5,
+            }
+        )
+        results["small_model_connection"] = {
+            "status": "success",
+            "provider": config.small_model_provider,
+            "model_used": config.small_model_name,
+            "response_id": test_response.get("id", "unknown"),
+        }
+    except Exception as e:
+        results["small_model_connection"] = {
+            "status": "failed",
+            "provider": config.small_model_provider,
+            "model_used": config.small_model_name,
+            "error": OpenAIClient.classify_openai_error(str(e)),
+        }
+
+    return JSONResponse(content=results)
 
 
 @router.get("/")
@@ -190,11 +218,19 @@ async def root():
         "message": "Claude-to-OpenAI API Proxy v1.0.0",
         "status": "running",
         "config": {
-            "openai_base_url": config.openai_base_url,
             "max_tokens_limit": config.max_tokens_limit,
-            "api_key_configured": bool(config.openai_api_key),
-            "big_model": config.big_model,
-            "small_model": config.small_model,
+            "big_model": {
+                "provider": config.big_model_provider,
+                "name": config.big_model_name,
+                "base_url": config.big_model_base_url,
+                "api_key_configured": bool(config.big_model_api_key),
+            },
+            "small_model": {
+                "provider": config.small_model_provider,
+                "name": config.small_model_name,
+                "base_url": config.small_model_base_url,
+                "api_key_configured": bool(config.small_model_api_key),
+            },
         },
         "endpoints": {
             "messages": "/v1/messages",
